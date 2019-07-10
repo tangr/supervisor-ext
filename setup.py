@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = 'supervisor-ext',
-    version = '0.1.3',
+    version = '0.1.4',
     packages = find_packages(),
     author = 'Shoubin Tang',
     author_email = 'shoubin.tang@gmail.com',
@@ -39,6 +39,7 @@ setup(
     entry_points = {
         'console_scripts': [
             'supervisor_ext = supervisor_ext.command_line:setup',
+            'supervisor_ext_memorycheck' = 'supervisor_ext.memorycheck:main'
         ]
     }
 )
