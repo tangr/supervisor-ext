@@ -39,7 +39,7 @@ setup(
     entry_points = {
         'console_scripts': [
             'supervisor_ext = supervisor_ext.command_line:setup',
-            'supervisor_ext_memorycheck' = 'supervisor_ext.memorycheck:main'
+            'supervisor_ext_memorycheck = supervisor_ext.memorycheck:main'
         ]
     }
 )
