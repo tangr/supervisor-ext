@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = 'supervisor-ext',
-    version = '0.1.2',
+    version = '0.1.3',
     packages = find_packages(),
     author = 'Shoubin Tang',
     author_email = 'shoubin.tang@gmail.com',

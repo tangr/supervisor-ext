@@ -15,7 +15,11 @@ class ExtControllerPlugin(ControllerPluginBase):
 
     def _get_tcp_ports(self):
         FILENAMESS = ['/proc/net/tcp', '/proc/net/tcp6', '/proc/net/udp', '/proc/net/udp6']
-        files = [open(i, "r") for i in FILENAMESS]
+        # files = [open(i, "r") for i in FILENAMESS]
+        files = []
+        for i in FILENAMESS:
+            if os.path.isfile(i):
+                files = files + [open(i, "r")]
         ports = {}
         for file in files:
             local_address_pos = 1
