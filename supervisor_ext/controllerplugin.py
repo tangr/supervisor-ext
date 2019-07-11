@@ -3,12 +3,14 @@ from supervisor.supervisorctl import ControllerPluginBase
 from supervisor.options import make_namespec
 from supervisor.options import split_namespec
 
+from supervisor import xmlrpc
 from supervisor import states
 
 import pprint
 import shlex
 import os
 from fnmatch import fnmatch
+import xmlrpclib
 
 class LSBStatusExitStatuses:
     NOT_RUNNING = 3
@@ -125,19 +127,154 @@ class ExtControllerPlugin(ControllerPluginBase):
             if info['state'] in states.STOPPED_STATES:
                 self.ctl.exitstatus = LSBStatusExitStatuses.NOT_RUNNING
 
-    # def do_extstatus(self, args):
-    #     if args:
-    #         return self.help_cache_count()
-    #     count = self.cache.getCount()
-    #     self.ctl.output(str(count))
-
     def help_extstatus(self):
-        self.ctl.output("status\t\t\tGet all process status info, with listen ports")
-        self.ctl.output("status <name>\t\tGet status for a single process")
-        self.ctl.output("status <gname>:*\tGet status for all "
+        self.ctl.output("extstatus\t\t\tGet all process status info, with listen ports")
+        self.ctl.output("extstatus <name>\t\tGet status for a single process")
+        self.ctl.output("extstatus <gname>:*\tGet status for all "
                         "processes in a group")
-        self.ctl.output("status <name> <name>\tGet status for multiple named "
+        self.ctl.output("extstatus <name> <name>\tGet status for multiple named "
                         "processes")
+
+    def _startresult(self, result):
+        name = make_namespec(result['group'], result['name'])
+        code = result['status']
+        template = '%s: ERROR (%s)'
+        if code == xmlrpc.Faults.BAD_NAME:
+            return template % (name, 'no such process')
+        elif code == xmlrpc.Faults.NO_FILE:
+            return template % (name, 'no such file')
+        elif code == xmlrpc.Faults.NOT_EXECUTABLE:
+            return template % (name, 'file is not executable')
+        elif code == xmlrpc.Faults.ALREADY_STARTED:
+            return template % (name, 'already started')
+        elif code == xmlrpc.Faults.SPAWN_ERROR:
+            return template % (name, 'spawn error')
+        elif code == xmlrpc.Faults.ABNORMAL_TERMINATION:
+            return template % (name, 'abnormal termination')
+        elif code == xmlrpc.Faults.SUCCESS:
+            return '%s: started' % name
+        # assertion
+        raise ValueError('Unknown result code %s for %s' % (code, name))
+
+    def do_extstart(self, arg):
+        if not self.ctl.upcheck():
+            return
+
+        names = arg.split()
+        supervisor = self.ctl.get_supervisor()
+
+        if not names:
+            self.ctl.output("Error: start requires a process name")
+            self.help_extstart()
+            return
+
+        if 'all' in names:
+            results = supervisor.startAllProcesses()
+            for result in results:
+                result = self._startresult(result)
+                self.ctl.output(result)
+
+        else:
+            for name in names:
+                group_name, process_name = split_namespec(name)
+                if process_name is None:
+                    try:
+                        results = supervisor.startProcessGroup(group_name)
+                        for result in results:
+                            result = self._startresult(result)
+                            self.ctl.output(result)
+                    except xmlrpclib.Fault, e:
+                        if e.faultCode == xmlrpc.Faults.BAD_NAME:
+                            error = "%s: ERROR (no such group)" % group_name
+                            self.ctl.output(error)
+                        else:
+                            raise
+                else:
+                    try:
+                        result = supervisor.startProcess(name)
+                    except xmlrpclib.Fault, e:
+                        error = self._startresult({'status': e.faultCode,
+                                                   'name': process_name,
+                                                   'group': group_name,
+                                                   'description': e.faultString})
+                        self.ctl.output(error)
+                    else:
+                        name = make_namespec(group_name, process_name)
+                        self.ctl.output('%s: started' % name)
+
+    def help_extstart(self):
+        self.ctl.output("extstart <name>\t\tStart a process")
+        self.ctl.output("extstart <gname>:*\t\tStart all processes in a group")
+        self.ctl.output("extstart <name> <name>\tStart multiple processes or groups")
+        self.ctl.output("extstart all\t\tStart all processes")
+
+    def _stopresult(self, result):
+        name = make_namespec(result['group'], result['name'])
+        code = result['status']
+        fault_string = result['description']
+        template = '%s: ERROR (%s)'
+        if code == xmlrpc.Faults.BAD_NAME:
+            return template % (name, 'no such process')
+        elif code == xmlrpc.Faults.NOT_RUNNING:
+            return template % (name, 'not running')
+        elif code == xmlrpc.Faults.SUCCESS:
+            return '%s: stopped' % name
+        elif code == xmlrpc.Faults.FAILED:
+            return fault_string
+        # assertion
+        raise ValueError('Unknown result code %s for %s' % (code, name))
+
+    def do_extstop(self, arg):
+        if not self.ctl.upcheck():
+            return
+
+        names = arg.split()
+        supervisor = self.ctl.get_supervisor()
+
+        if not names:
+            self.ctl.output('Error: stop requires a process name')
+            self.help_extstop()
+            return
+
+        if 'all' in names:
+            results = supervisor.stopAllProcesses()
+            for result in results:
+                result = self._stopresult(result)
+                self.ctl.output(result)
+
+        else:
+            for name in names:
+                group_name, process_name = split_namespec(name)
+                if process_name is None:
+                    try:
+                        results = supervisor.stopProcessGroup(group_name)
+                        for result in results:
+                            result = self._stopresult(result)
+                            self.ctl.output(result)
+                    except xmlrpclib.Fault, e:
+                        if e.faultCode == xmlrpc.Faults.BAD_NAME:
+                            error = "%s: ERROR (no such group)" % group_name
+                            self.ctl.output(error)
+                        else:
+                            raise
+                else:
+                    try:
+                        result = supervisor.stopProcess(name)
+                    except xmlrpclib.Fault, e:
+                        error = self._stopresult({'status': e.faultCode,
+                                                  'name': process_name,
+                                                  'group': group_name,
+                                                  'description':e.faultString})
+                        self.ctl.output(error)
+                    else:
+                        name = make_namespec(group_name, process_name)
+                        self.ctl.output('%s: stopped' % name)
+
+    def help_extstop(self):
+        self.ctl.output("extstop <name>\t\tStop a process")
+        self.ctl.output("extstop <gname>:*\t\tStop all processes in a group")
+        self.ctl.output("extstop <name> <name>\tStop multiple processes or groups")
+        self.ctl.output("extstop all\t\tStop all processes")
 
 def make_main_controllerplugin(controller, **config):
     return ExtControllerPlugin(controller)
