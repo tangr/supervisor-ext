@@ -1,9 +1,14 @@
 from supervisor.supervisorctl import ControllerPluginBase
+
 from supervisor.options import make_namespec
+from supervisor.options import split_namespec
+
 from supervisor import states
+
 import pprint
 import shlex
 import os
+from fnmatch import fnmatch
 
 class LSBStatusExitStatuses:
     NOT_RUNNING = 3
@@ -87,7 +92,32 @@ class ExtControllerPlugin(ControllerPluginBase):
         supervisor = self.ctl.get_supervisor()
         all_infos = supervisor.getAllProcessInfo()
 
-        matching_infos = all_infos
+        names = arg.split()
+        if not names or "all" in names:
+            matching_infos = all_infos
+        else:
+            matching_infos = []
+
+            for name in names:
+                bad_name = True
+                group_name, process_name = split_namespec(name)
+
+                for info in all_infos:
+                    matched = info['group'] == group_name
+                    if process_name is not None:
+                        matched = matched and info['name'] == process_name
+
+                    if matched:
+                        bad_name = False
+                        matching_infos.append(info)
+
+                if bad_name:
+                    if process_name is None:
+                        msg = "%s: ERROR (no such group)" % group_name
+                    else:
+                        msg = "%s: ERROR (no such process)" % name
+                    self.ctl.output(msg)
+                    self.ctl.exitstatus = LSBStatusExitStatuses.UNKNOWN
 
         self._show_statuses(matching_infos)
 
@@ -103,6 +133,11 @@ class ExtControllerPlugin(ControllerPluginBase):
 
     def help_extstatus(self):
         self.ctl.output("status\t\t\tGet all process status info, with listen ports")
+        self.ctl.output("status <name>\t\tGet status for a single process")
+        self.ctl.output("status <gname>:*\tGet status for all "
+                        "processes in a group")
+        self.ctl.output("status <name> <name>\tGet status for multiple named "
+                        "processes")
 
 def make_main_controllerplugin(controller, **config):
     return ExtControllerPlugin(controller)
