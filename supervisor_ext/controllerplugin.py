@@ -158,7 +158,7 @@ class ExtControllerPlugin(ControllerPluginBase):
         # assertion
         raise ValueError('Unknown result code %s for %s' % (code, name))
 
-    def do_extstart(self, arg):
+    def _extstart(self, arg):
         if not self.ctl.upcheck():
             return
 
@@ -204,6 +204,47 @@ class ExtControllerPlugin(ControllerPluginBase):
                         name = make_namespec(group_name, process_name)
                         self.ctl.output('%s: started' % name)
 
+    def do_extstart(self, arg):
+        if not self.ctl.upcheck():
+            self.ctl.exitstatus = LSBStatusExitStatuses.UNKNOWN
+            return
+
+        supervisor = self.ctl.get_supervisor()
+        all_infos = supervisor.getAllProcessInfo()
+
+        names = arg.split()
+        if not names or "all" in names:
+            matching_names = 'all'
+        else:
+            matching_names = ''
+
+            for name in names:
+                bad_name = True
+                group_name, process_name = split_namespec(name)
+
+                for info in all_infos:
+                    matched = info['group'] == group_name
+                    if process_name is not None:
+                        matched = matched and info['name'] == process_name
+                        if group_name == process_name:
+                            matched = fnmatch(info['name'], process_name)
+
+                    if matched:
+                        bad_name = False
+                        program_name = make_namespec(info['group'], info['name'])
+                        matching_names = matching_names + ' ' + program_name
+
+                if bad_name:
+                    if process_name is None:
+                        msg = "%s: ERROR (no such group)" % group_name
+                    else:
+                        msg = "%s: ERROR (no such process)" % name
+                    self.ctl.output(msg)
+                    self.ctl.exitstatus = LSBStatusExitStatuses.UNKNOWN
+
+        if matching_names:
+            self._extstart(matching_names)
+
     def help_extstart(self):
         self.ctl.output("extstart <name>\t\tStart a process")
         self.ctl.output("extstart <gname>:*\t\tStart all processes in a group")
@@ -226,7 +267,7 @@ class ExtControllerPlugin(ControllerPluginBase):
         # assertion
         raise ValueError('Unknown result code %s for %s' % (code, name))
 
-    def do_extstop(self, arg):
+    def _extstop(self, arg):
         if not self.ctl.upcheck():
             return
 
@@ -271,6 +312,47 @@ class ExtControllerPlugin(ControllerPluginBase):
                     else:
                         name = make_namespec(group_name, process_name)
                         self.ctl.output('%s: stopped' % name)
+
+    def do_extstop(self, arg):
+        if not self.ctl.upcheck():
+            self.ctl.exitstatus = LSBStatusExitStatuses.UNKNOWN
+            return
+
+        supervisor = self.ctl.get_supervisor()
+        all_infos = supervisor.getAllProcessInfo()
+
+        names = arg.split()
+        if not names or "all" in names:
+            matching_names = 'all'
+        else:
+            matching_names = ''
+
+            for name in names:
+                bad_name = True
+                group_name, process_name = split_namespec(name)
+
+                for info in all_infos:
+                    matched = info['group'] == group_name
+                    if process_name is not None:
+                        matched = matched and info['name'] == process_name
+                        if group_name == process_name:
+                            matched = fnmatch(info['name'], process_name)
+
+                    if matched:
+                        bad_name = False
+                        program_name = make_namespec(info['group'], info['name'])
+                        matching_names = matching_names + ' ' + program_name
+
+                if bad_name:
+                    if process_name is None:
+                        msg = "%s: ERROR (no such group)" % group_name
+                    else:
+                        msg = "%s: ERROR (no such process)" % name
+                    self.ctl.output(msg)
+                    self.ctl.exitstatus = LSBStatusExitStatuses.UNKNOWN
+
+        if matching_names:
+            self._extstop(matching_names)
 
     def help_extstop(self):
         self.ctl.output("extstop <name>\t\tStop a process")
