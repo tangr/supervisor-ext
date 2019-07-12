@@ -108,6 +108,8 @@ class ExtControllerPlugin(ControllerPluginBase):
                     matched = info['group'] == group_name
                     if process_name is not None:
                         matched = matched and info['name'] == process_name
+                        if group_name == process_name:
+                            matched = fnmatch(info['name'], process_name)
 
                     if matched:
                         bad_name = False
